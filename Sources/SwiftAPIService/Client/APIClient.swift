@@ -353,6 +353,41 @@ public final class APIClient: Sendable {
         }
     }
 
+    // MARK: - SSE Streaming
+
+    /// Opens an SSE stream and emits incoming events as an async sequence.
+    ///
+    /// - Parameters:
+    ///   - endpoint: The endpoint describing the SSE route.
+    ///   - configuration: Runtime stream behavior (retry, `Last-Event-ID`, validation).
+    /// - Returns: An `AsyncThrowingStream` of `SSEEvent`.
+    public func stream(
+        _ endpoint: some SSEEndpoint,
+        configuration: SSEStreamConfiguration = .init()
+    ) -> AsyncThrowingStream<SSEEvent, Error> {
+        let connection = SSEConnection(
+            requestBuilder: { [weak self] lastEventID in
+                guard let self else {
+                    throw SSEError.streamClosed
+                }
+                return try await self.buildSSEURLRequest(for: endpoint, lastEventID: lastEventID)
+            },
+            refreshAuth: { [weak self] in
+                guard let self else { return false }
+                guard let authInterceptor = self.configuration.authInterceptor else { return false }
+                do {
+                    try await authInterceptor.refreshCredential()
+                    return true
+                } catch {
+                    return false
+                }
+            },
+            configuration: configuration,
+            shouldReconnect: endpoint.shouldReconnect
+        )
+        return connection.makeStream()
+    }
+
     // MARK: - Private
 
     private func buildURLRequest(
@@ -376,6 +411,42 @@ public final class APIClient: Sendable {
         }
 
         // Body
+        if let body = endpoint.body {
+            urlRequest.httpBody = try encoder.encode(body)
+        }
+
+        return urlRequest
+    }
+
+    private func buildSSEURLRequest(
+        for endpoint: some SSEEndpoint,
+        lastEventID: String?
+    ) async throws -> URLRequest {
+        let url = endpoint.url(relativeTo: environment.baseURL)
+        var urlRequest = URLRequest(url: url)
+        urlRequest.method = endpoint.method
+        urlRequest.timeoutInterval = environment.timeoutInterval
+
+        for (name, value) in environment.defaultHeaders {
+            urlRequest.setValue(value, forHTTPHeaderField: name)
+        }
+
+        urlRequest.setValue(endpoint.contentType, forHTTPHeaderField: "Content-Type")
+        urlRequest.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        if let lastEventID {
+            urlRequest.setValue(lastEventID, forHTTPHeaderField: "Last-Event-ID")
+        }
+
+        if let endpointHeaders = endpoint.headers {
+            for header in endpointHeaders {
+                urlRequest.setValue(header.value, forHTTPHeaderField: header.name)
+            }
+        }
+
+        if let token = await configuration.tokenStore.accessToken {
+            urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
         if let body = endpoint.body {
             urlRequest.httpBody = try encoder.encode(body)
         }

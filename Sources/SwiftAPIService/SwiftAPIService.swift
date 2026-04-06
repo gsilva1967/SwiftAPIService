@@ -34,3 +34,8 @@
 //
 //  Logging/
 //    - APILogger, APILogLevel
+//
+//  SSE/
+//    - SSEEvent, SSEError
+//    - SSERetryStrategy, SSEStreamConfiguration
+//    - SSEEndpoint

@@ -192,6 +192,58 @@ do {
 
 ---
 
+## Server-Sent Events (SSE)
+
+Use `SSEEndpoint` + `APIClient.stream(...)` to consume `text/event-stream` endpoints as an async sequence.
+
+### Define an SSE endpoint
+
+```swift
+enum StreamEndpoint: SSEEndpoint {
+    case events
+
+    var path: String { "/events" }
+}
+```
+
+### Consume the stream
+
+```swift
+for try await event in apiClient.stream(StreamEndpoint.events) {
+    print(event.event ?? "message", event.data)
+}
+```
+
+### Decode typed payloads
+
+```swift
+struct StreamPayload: Decodable {
+    let message: String
+}
+
+for try await event in apiClient.stream(StreamEndpoint.events) {
+    let payload = try event.decodeData(as: StreamPayload.self)
+    print(payload.message)
+}
+```
+
+### Reconnection behavior
+
+- Streams are exposed as `AsyncThrowingStream<SSEEvent, Error>` to provide natural backpressure and cancellation with Swift concurrency.
+- Reconnection uses `SSERetryStrategy` (exponential backoff + optional jitter), while respecting server-provided `retry` values when present.
+- The latest event `id` is persisted in memory and sent via `Last-Event-ID` on reconnect to reduce duplicate deliveries.
+
+### Authentication behavior
+
+- SSE requests include the current bearer token from `TokenStore`.
+- If the server responds with `401`, the client can attempt credential refresh (when `AuthInterceptor` is configured) and reconnect.
+- If refresh fails (or retry limit is reached), the stream fails with an unauthorized error.
+
+### Why URLSession for SSE (instead of Alamofire request APIs)?
+
+Alamofire is still used as the core transport layer for request/response APIs and interceptor composition, but SSE uses `URLSession` async bytes streaming because it is the most direct, stable fit for long-lived line-delimited event streams in Swift concurrency. This keeps the API consistent with the package while avoiding extra indirection for stream parsing and reconnection control.
+---
+
 ## Architecture Overview
 
 ```

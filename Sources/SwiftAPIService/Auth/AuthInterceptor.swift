@@ -105,12 +105,7 @@ public final class AuthInterceptor: RequestInterceptor, @unchecked Sendable {
             guard let self else { return }
 
             do {
-                guard let credential = await tokenStore.credential else {
-                    throw APIError(kind: .tokenRefreshFailed, details: "No refresh token available")
-                }
-
-                let newCredential = try await refreshProvider.refresh(using: credential.refreshToken)
-                await tokenStore.store(newCredential)
+                try await refreshCredential()
 
                 self.completeAllPending(with: .retry)
             } catch {
@@ -124,6 +119,15 @@ public final class AuthInterceptor: RequestInterceptor, @unchecked Sendable {
     }
 
     // MARK: - Private
+
+    /// Performs a single refresh-token exchange and stores the new credential.
+    public func refreshCredential() async throws {
+        guard let credential = await tokenStore.credential else {
+            throw APIError(kind: .tokenRefreshFailed, details: "No refresh token available")
+        }
+        let newCredential = try await refreshProvider.refresh(using: credential.refreshToken)
+        await tokenStore.store(newCredential)
+    }
 
     private func completeAllPending(with result: RetryResult) {
         lock.lock()
