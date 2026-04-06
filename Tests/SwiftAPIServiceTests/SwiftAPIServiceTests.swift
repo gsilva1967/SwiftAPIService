@@ -1,12 +1,12 @@
 //
-//  GDSNetworkingTests.swift
-//  GDSNetworkingTests
+//  SwiftAPIServiceTests.swift
+//  SwiftAPIServiceTests
 //
 //  Created by Gustavo Silva.
 //
 
 import Testing
-@testable import GDSNetworking
+@testable import SwiftAPIService
 
 @Test func keychainStoreAndRead() {
     let keychain = KeychainService(service: "com.gds.networking.tests")

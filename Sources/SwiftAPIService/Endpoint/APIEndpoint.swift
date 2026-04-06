@@ -1,6 +1,6 @@
 //
 //  APIEndpoint.swift
-//  GDSNetworking
+//  SwiftAPIService
 //
 //  Created by Gustavo Silva.
 //
@@ -75,7 +75,7 @@ public extension APIEndpoint {
             components.queryItems = queryItems
         }
         guard let url = components.url else {
-            fatalError("[GDSNetworking] Unable to construct URL for path: \(path)")
+            fatalError("[SwiftAPIService] Unable to construct URL for path: \(path)")
         }
         return url
     }

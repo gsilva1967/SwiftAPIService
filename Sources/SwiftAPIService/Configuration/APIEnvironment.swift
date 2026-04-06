@@ -1,6 +1,6 @@
 //
 //  APIEnvironment.swift
-//  GDSNetworking
+//  SwiftAPIService
 //
 //  Created by Gustavo Silva.
 //

@@ -1,6 +1,6 @@
 //
-//  GDSNetworking.swift
-//  GDSNetworking
+//  SwiftAPIService.swift
+//  SwiftAPIService
 //
 //  Created by Gustavo Silva.
 //

@@ -1,4 +1,4 @@
-# GDSNetworking
+# SwiftAPIService
 
 A production-ready Swift Package that provides a reusable API client built on top of Alamofire with:
 
@@ -21,7 +21,7 @@ A production-ready Swift Package that provides a reusable API client built on to
 Add via Swift Package Manager:
 
 ```swift
-.package(url: "https://github.com/your-org/GDSNetworking.git", from: "1.0.0")
+.package(url: "https://github.com/your-org/SwiftAPIService.git", from: "1.0.0")
 ```
 
 Or add the local package in Xcode: **File → Add Package Dependencies → Add Local...**
@@ -33,7 +33,7 @@ Or add the local package in Xcode: **File → Add Package Dependencies → Add L
 ### 1. Define your environment
 
 ```swift
-import GDSNetworking
+import SwiftAPIService
 
 enum AppEnvironment: APIEnvironment {
     case dev, staging, prod
@@ -195,9 +195,9 @@ do {
 ## Architecture Overview
 
 ```
-GDSNetworking/
-├── Sources/GDSNetworking/
-│   ├── GDSNetworking.swift          # Barrel re-export
+SwiftAPIService/
+├── Sources/SwiftAPIService/
+│   ├── SwiftAPIService.swift          # Barrel re-export
 │   ├── Configuration/
 │   │   └── APIEnvironment.swift     # Environment protocol (dev/staging/prod)
 │   ├── Endpoint/
@@ -214,8 +214,8 @@ GDSNetworking/
 │   │   └── APIError.swift           # Typed error model
 │   └── Logging/
 │       └── APILogger.swift          # os.log EventMonitor
-└── Tests/GDSNetworkingTests/
-    └── GDSNetworkingTests.swift
+└── Tests/SwiftAPIServiceTests/
+    └── SwiftAPIServiceTests.swift
 ```
 
 ---
@@ -239,7 +239,7 @@ GDSNetworking/
 
 The `APIClient` includes **legacy-compatible** methods that mirror the existing signatures:
 
-| Safeguard method       | GDSNetworking equivalent        |
+| Safeguard method       | SwiftAPIService equivalent        |
 |------------------------|---------------------------------|
 | `dispatch()`           | `apiClient.dispatch()`          |
 | `dispatchUpload()`     | `apiClient.dispatchUpload()`    |

@@ -4,15 +4,15 @@
 import PackageDescription
 
 let package = Package(
-    name: "GDSNetworking",
+    name: "SwiftAPIService",
     platforms: [
         .iOS(.v16),
         .macOS(.v13),
     ],
     products: [
         .library(
-            name: "GDSNetworking",
-            targets: ["GDSNetworking"]
+            name: "SwiftAPIService",
+            targets: ["SwiftAPIService"]
         ),
     ],
     dependencies: [
@@ -20,14 +20,14 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "GDSNetworking",
+            name: "SwiftAPIService",
             dependencies: ["Alamofire"],
-            path: "Sources/GDSNetworking"
+            path: "Sources/SwiftAPIService"
         ),
         .testTarget(
-            name: "GDSNetworkingTests",
-            dependencies: ["GDSNetworking"],
-            path: "Tests/GDSNetworkingTests"
+            name: "SwiftAPIServiceTests",
+            dependencies: ["SwiftAPIService"],
+            path: "Tests/SwiftAPIServiceTests"
         ),
     ]
 )

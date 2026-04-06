@@ -1,6 +1,6 @@
 //
 //  APIClient.swift
-//  GDSNetworking
+//  SwiftAPIService
 //
 //  Created by Gustavo Silva.
 //
@@ -8,7 +8,7 @@
 import Alamofire
 import Foundation
 
-/// The central networking client for the GDSNetworking package.
+/// The central networking client for the SwiftAPIService package.
 ///
 /// `APIClient` wraps an Alamofire `Session` and provides high-level,
 /// async/await methods for JSON requests, multipart uploads, and
