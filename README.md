@@ -8,6 +8,7 @@ A production-ready Swift Package that provides a reusable API client built on to
 - **Typed error handling**
 - **Structured logging** via `os.log`
 - **Environment configuration** (dev / staging / prod)
+- **Server-Sent Events (SSE)** streaming with reconnect, backoff, and `Last-Event-ID` continuity
 - **Full Swift 6 concurrency safety** (`Sendable`, `actor`)
 
 ## Requirements
@@ -227,6 +228,27 @@ for try await event in apiClient.stream(StreamEndpoint.events) {
 }
 ```
 
+### Customize stream behavior
+
+```swift
+let streamConfig = SSEStreamConfiguration(
+    retryStrategy: SSERetryStrategy(
+        baseDelayMilliseconds: 1_000,   // initial reconnect delay
+        maxDelayMilliseconds: 30_000,   // cap on exponential backoff
+        maxAttempts: 5,                 // nil = unlimited
+        jitterRatio: 0.1               // ±10% randomisation
+    ),
+    lastEventID: nil,                  // resume from a known event ID
+    validateContentType: true,         // enforce text/event-stream
+    requestTimeout: 30,                // per-connection timeout
+    unauthorizedRefreshRetryLimit: 1   // 401 refresh attempts before failing
+)
+
+for try await event in apiClient.stream(StreamEndpoint.events, configuration: streamConfig) {
+    print(event.data)
+}
+```
+
 ### Reconnection behavior
 
 - Streams are exposed as `AsyncThrowingStream<SSEEvent, Error>` to provide natural backpressure and cancellation with Swift concurrency.
@@ -237,11 +259,12 @@ for try await event in apiClient.stream(StreamEndpoint.events) {
 
 - SSE requests include the current bearer token from `TokenStore`.
 - If the server responds with `401`, the client can attempt credential refresh (when `AuthInterceptor` is configured) and reconnect.
-- If refresh fails (or retry limit is reached), the stream fails with an unauthorized error.
+- If refresh fails (or retry limit is reached), the stream fails with `SSEError.unauthorized`.
 
-### Why URLSession for SSE (instead of Alamofire request APIs)?
+### Why URLSession for SSE (instead of Alamofire)?
 
 Alamofire is still used as the core transport layer for request/response APIs and interceptor composition, but SSE uses `URLSession` async bytes streaming because it is the most direct, stable fit for long-lived line-delimited event streams in Swift concurrency. This keeps the API consistent with the package while avoiding extra indirection for stream parsing and reconnection control.
+
 ---
 
 ## Architecture Overview
@@ -249,25 +272,54 @@ Alamofire is still used as the core transport layer for request/response APIs an
 ```
 SwiftAPIService/
 ├── Sources/SwiftAPIService/
-│   ├── SwiftAPIService.swift          # Barrel re-export
+│   ├── SwiftAPIService.swift              # Barrel re-export (re-exports Alamofire)
 │   ├── Configuration/
-│   │   └── APIEnvironment.swift     # Environment protocol (dev/staging/prod)
+│   │   └── APIEnvironment.swift           # Environment protocol (base URL, headers, timeout)
 │   ├── Endpoint/
-│   │   └── APIEndpoint.swift        # Endpoint protocol
+│   │   └── APIEndpoint.swift              # Endpoint protocol (path, method, body, status)
 │   ├── Client/
-│   │   └── APIClient.swift          # Main API client
+│   │   └── APIClient.swift                # Main API client + SSE stream entry point
 │   ├── Auth/
-│   │   ├── TokenStore.swift         # Actor-based credential store
-│   │   ├── AuthInterceptor.swift    # RequestInterceptor (adapt + retry)
-│   │   └── TokenRefreshProvider.swift # Protocol for refresh logic
+│   │   ├── TokenStore.swift               # Actor-based credential store (Keychain-backed)
+│   │   ├── AuthInterceptor.swift          # RequestInterceptor (adapt + 401 retry)
+│   │   └── TokenRefreshProvider.swift     # Protocol for app-specific refresh logic
 │   ├── Security/
-│   │   └── KeychainService.swift    # Keychain wrapper
+│   │   └── KeychainService.swift          # Security.framework Keychain wrapper
 │   ├── Errors/
-│   │   └── APIError.swift           # Typed error model
-│   └── Logging/
-│       └── APILogger.swift          # os.log EventMonitor
+│   │   └── APIError.swift                 # Typed error model + factory helpers
+│   ├── Logging/
+│   │   └── APILogger.swift                # os.log-backed Alamofire EventMonitor
+│   └── SSE/
+│       ├── SSEEndpoint.swift              # SSEEndpoint protocol
+│       ├── SSEEvent.swift                 # Parsed SSE frame + decodeData helper
+│       ├── SSEError.swift                 # SSE-specific error cases
+│       ├── SSERetryStrategy.swift         # Exponential backoff + jitter policy
+│       └── SSEStreamConfiguration.swift   # Runtime stream config + SSEParser + SSEConnection
 └── Tests/SwiftAPIServiceTests/
-    └── SwiftAPIServiceTests.swift
+    ├── SwiftAPIServiceTests.swift         # Keychain + APIError tests
+    └── SSETests.swift                     # SSEParser + SSERetryStrategy + SSEEvent tests
+```
+
+---
+
+## Development
+
+### Build
+
+```sh
+swift build
+```
+
+### Run tests
+
+```sh
+swift test
+```
+
+Run a single test by name:
+
+```sh
+swift test --filter sseParserParsesEventFields
 ```
 
 ---

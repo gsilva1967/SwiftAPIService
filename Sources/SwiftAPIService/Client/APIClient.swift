@@ -174,6 +174,50 @@ public final class APIClient: Sendable {
         }
     }
 
+    /// Performs a request to an absolute URL and decodes the JSON response.
+    ///
+    /// Use this overload for external APIs that are not modelled as
+    /// an ``APIEndpoint``.
+    ///
+    /// - Parameters:
+    ///   - url: The absolute URL string for the request.
+    ///   - method: The HTTP method. Defaults to `.get`.
+    ///   - acceptableStatusCodes: Valid status codes. Defaults to `200..<300`.
+    ///   - type: The `Decodable` type to decode from the response body.
+    /// - Returns: The decoded value of type `R`.
+    public func request<R: Decodable & Sendable>(
+        url: String,
+        method: HTTPMethod = .get,
+        acceptableStatusCodes: Range<Int> = 200..<300,
+        as type: R.Type = R.self
+    ) async throws -> R {
+        guard let requestURL = URL(string: url) else {
+            throw APIError(
+                kind: .unknown(URLError(.badURL)),
+                details: "Invalid URL: \(url)",
+                technicalDetails: ["Unable to construct URL from string: \(url)"]
+            )
+        }
+        var urlRequest = URLRequest(url: requestURL)
+        urlRequest.method = method
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")
+        urlRequest.timeoutInterval = environment.timeoutInterval
+
+        let dataTask = session.request(urlRequest)
+            .validate(statusCode: acceptableStatusCodes)
+            .serializingDecodable(type, automaticallyCancelling: true, decoder: decoder)
+
+        let response = await dataTask.response
+
+        switch response.result {
+        case .success:
+            return try await dataTask.value
+        case let .failure(afError):
+            throw APIError.from(afError)
+        }
+    }
+
     // MARK: - Raw Dispatch (legacy-compatible)
 
     /// A lower-level dispatch method that mirrors the original Safeguard
@@ -397,7 +441,7 @@ public final class APIClient: Sendable {
         let url = endpoint.url(relativeTo: environment.baseURL)
         var urlRequest = URLRequest(url: url)
         urlRequest.method = endpoint.method
-        urlRequest.timeoutInterval = environment.timeoutInterval
+        urlRequest.timeoutInterval = endpoint.timeoutInterval ?? environment.timeoutInterval
 
         // Headers
         let ct = contentType ?? endpoint.contentType

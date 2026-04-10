@@ -51,6 +51,10 @@ public protocol APIEndpoint: Sendable {
     /// Valid HTTP status codes for response validation.
     /// Defaults to `200..<300`.
     var acceptableStatusCodes: Range<Int> { get }
+
+    /// Custom timeout interval for this endpoint.
+    /// When `nil`, the environment's `timeoutInterval` is used.
+    var timeoutInterval: TimeInterval? { get }
 }
 
 // MARK: - Defaults
@@ -62,6 +66,7 @@ public extension APIEndpoint {
     var queryItems: [URLQueryItem]? { nil }
     var body: (any Encodable & Sendable)? { nil }
     var acceptableStatusCodes: Range<Int> { 200..<300 }
+    var timeoutInterval: TimeInterval? { nil }
 }
 
 // MARK: - URL Construction
