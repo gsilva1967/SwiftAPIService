@@ -5,7 +5,7 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 ## Project snapshot
 - This repo is a Swift Package (`Package.swift`) that builds a reusable networking library named `SwiftAPIService`.
 - Platform targets: iOS 16+ and macOS 13+.
-- Main external dependency: Alamofire (`from: 5.10.0`).
+- External dependencies: Alamofire (`from: 5.10.0`), AppAuth-iOS (`from: 1.7.0`).
 - Tests use Swift Testing (`import Testing` and `@Test`), not XCTest.
 
 ## Commands
@@ -64,7 +64,7 @@ The library is organized around a small set of protocols and one main client imp
   - Protocol for deployment-specific values (base URL, default headers, timeout).
 
 - `Sources/SwiftAPIService/Auth/`
-  - `TokenStore.swift`: actor-backed credential storage, persisted via Keychain.
+  - `TokenStore.swift`: actor-backed credential storage, persisted via Keychain. `AuthCredential` includes optional `idToken` and `accessTokenExpirationDate` for OIDC.
   - `AuthInterceptor.swift`: Alamofire `RequestInterceptor` that attaches bearer tokens and handles 401 refresh retry.
   - `TokenRefreshProvider.swift`: protocol the host app must implement for refresh API behavior.
 
@@ -77,6 +77,13 @@ The library is organized around a small set of protocols and one main client imp
 - `Sources/SwiftAPIService/Logging/APILogger.swift`
   - Alamofire `EventMonitor` backed by `os.log`; enabled via `APIClient.Configuration.logLevel`.
 
+- `Sources/SwiftAPIService/OIDC/`
+  - `OIDCConfiguration.swift`: OIDC provider/client configuration (issuer, clientID, redirectURI, scopes).
+  - `OIDCAuthService.swift`: orchestrates OIDC discovery, PKCE login via AppAuth's `OIDAuthState`, session restore, and logout.
+  - `OIDCTokenRefreshProvider.swift`: concrete `TokenRefreshProvider` using AppAuth's `OIDTokenRequest` with `refresh_token` grant.
+  - `OIDCPresentationContext.swift`: platform-specific protocol (`UIViewController` on iOS, `NSWindow` on macOS) and AppAuth external user agent bridge.
+  - `OIDCError.swift`: typed error enum for OIDC flow failures.
+
 ### Auth and retry behavior to preserve
 - `AuthInterceptor` coalesces concurrent 401 refresh attempts behind a lock, queues pending retries, then resolves all queued requests once refresh succeeds/fails.
 - On refresh failure, tokens are cleared from `TokenStore` and pending requests fail with `.tokenRefreshFailed`.
@@ -84,4 +91,4 @@ The library is organized around a small set of protocols and one main client imp
 
 ## Test layout
 - Test target: `Tests/SwiftAPIServiceTests`.
-- Current tests validate keychain persistence semantics and `APIError` mapping behavior.
+- Tests cover: keychain persistence, `APIError` mapping, SSE parsing/retry, `OIDCConfiguration`, `OIDCError`, `AuthCredential` OIDC fields, `TokenStore` OIDC persistence, and `OIDCAuthService` unit-testable paths (restore, logout, init safety).

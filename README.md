@@ -3,6 +3,7 @@
 A production-ready Swift Package that provides a reusable API client built on top of Alamofire with:
 
 - **Token-based authentication** with automatic refresh and retry
+- **OIDC / OAuth 2.0 authentication** via AppAuth (discovery, PKCE login, token refresh, logout)
 - **Secure Keychain storage** (no UserDefaults)
 - **Protocol-based endpoint abstraction**
 - **Typed error handling**
@@ -16,6 +17,7 @@ A production-ready Swift Package that provides a reusable API client built on to
 - Swift 6.0+
 - iOS 16+ / macOS 13+
 - Alamofire 5.10+
+- AppAuth 1.7+ (for OIDC/OAuth2 features)
 
 ## Installation
 
@@ -267,6 +269,116 @@ Alamofire is still used as the core transport layer for request/response APIs an
 
 ---
 
+## OIDC / OAuth 2.0 Authentication
+
+SwiftAPIService includes a built-in OIDC/OAuth2 layer powered by [AppAuth](https://github.com/openid/AppAuth-iOS). It handles service discovery, PKCE-secured authorization, token exchange, refresh, and logout — all storing credentials through the existing `TokenStore` and plugging into `AuthInterceptor` for automatic 401 retry.
+
+### 1. Configure the OIDC provider
+
+```swift
+let oidcConfig = OIDCConfiguration(
+    issuer: URL(string: "https://accounts.google.com")!,
+    clientID: "your-client-id",
+    redirectURI: URL(string: "com.yourapp://callback")!,
+    scopes: ["openid", "profile", "email", "offline_access"]
+)
+```
+
+### 2. Create the auth service
+
+```swift
+let keychain = KeychainService(service: "com.yourapp.api")
+let tokenStore = TokenStore(keychain: keychain)
+let oidcService = OIDCAuthService(configuration: oidcConfig, tokenStore: tokenStore)
+```
+
+### 3. Login
+
+Present the system browser for the OIDC authorization flow:
+
+```swift
+// Implement the presentation context protocol
+class MyPresenter: OIDCPresentationContextProviding {
+    @MainActor func presentingContext() -> OIDCPresentingContext {
+        // iOS: return the root UIViewController
+        // macOS: return the key NSWindow
+    }
+}
+
+let credential = try await oidcService.login(presentationContext: MyPresenter())
+```
+
+AppAuth handles PKCE code challenge generation, browser presentation via `OIDExternalUserAgentIOS` / `OIDExternalUserAgentMac`, callback parsing, and token exchange automatically.
+
+### 4. Wire into the API client
+
+After login (or session restore), `tokenRefreshProvider` is available:
+
+```swift
+let authInterceptor = AuthInterceptor(
+    tokenStore: tokenStore,
+    refreshProvider: oidcService.tokenRefreshProvider!
+)
+
+let apiClient = APIClient(configuration: .init(
+    environment: AppEnvironment.dev,
+    tokenStore: tokenStore,
+    authInterceptor: authInterceptor
+))
+```
+
+All requests now automatically include the Bearer token, and 401 responses trigger a transparent token refresh via AppAuth.
+
+### 5. Restore session on app launch
+
+```swift
+if let credential = try await oidcService.restoreSession() {
+    // Tokens exist in Keychain — tokenRefreshProvider is ready.
+    // Build APIClient as above.
+} else {
+    // No stored session — show login.
+}
+```
+
+### 6. Logout
+
+```swift
+let endSessionURL = await oidcService.logout()
+// Tokens are cleared. If the provider supports RP-Initiated Logout,
+// endSessionURL contains the end_session_endpoint with id_token_hint.
+```
+
+### OIDC credential fields
+
+`AuthCredential` now includes optional OIDC fields (backward compatible):
+
+```swift
+let credential = AuthCredential(
+    accessToken: "...",
+    refreshToken: "...",
+    idToken: "eyJ...",                       // OIDC ID token (JWT)
+    accessTokenExpirationDate: Date(...)     // Token expiry
+)
+
+credential.isAccessTokenExpired  // Convenience check
+```
+
+### Configuration options
+
+```swift
+OIDCConfiguration(
+    issuer: issuerURL,              // OIDC issuer (used for discovery)
+    clientID: "...",                // OAuth client ID
+    clientSecret: nil,              // Optional (native apps use PKCE)
+    redirectURI: redirectURL,       // Must match provider registration
+    scopes: ["openid"],             // OAuth/OIDC scopes
+    additionalParameters: [:],      // Extra authorization params
+    prefersEphemeralSession: false  // true = no shared browser cookies
+)
+```
+
+---
+
 ## Architecture Overview
 
 ```
@@ -289,15 +401,22 @@ SwiftAPIService/
 │   │   └── APIError.swift                 # Typed error model + factory helpers
 │   ├── Logging/
 │   │   └── APILogger.swift                # os.log-backed Alamofire EventMonitor
-│   └── SSE/
-│       ├── SSEEndpoint.swift              # SSEEndpoint protocol
-│       ├── SSEEvent.swift                 # Parsed SSE frame + decodeData helper
-│       ├── SSEError.swift                 # SSE-specific error cases
-│       ├── SSERetryStrategy.swift         # Exponential backoff + jitter policy
-│       └── SSEStreamConfiguration.swift   # Runtime stream config + SSEParser + SSEConnection
+│   ├── SSE/
+│   │   ├── SSEEndpoint.swift              # SSEEndpoint protocol
+│   │   ├── SSEEvent.swift                 # Parsed SSE frame + decodeData helper
+│   │   ├── SSEError.swift                 # SSE-specific error cases
+│   │   ├── SSERetryStrategy.swift         # Exponential backoff + jitter policy
+│   │   └── SSEStreamConfiguration.swift   # Runtime stream config + SSEParser + SSEConnection
+│   └── OIDC/
+│       ├── OIDCConfiguration.swift        # OIDC provider/client configuration
+│       ├── OIDCAuthService.swift          # Discovery, login (PKCE), restore, logout
+│       ├── OIDCTokenRefreshProvider.swift  # AppAuth-based TokenRefreshProvider
+│       ├── OIDCPresentationContext.swift   # Platform presentation protocol + agent bridge
+│       └── OIDCError.swift                # OIDC-specific error cases
 └── Tests/SwiftAPIServiceTests/
     ├── SwiftAPIServiceTests.swift         # Keychain + APIError tests
-    └── SSETests.swift                     # SSEParser + SSERetryStrategy + SSEEvent tests
+    ├── SSETests.swift                     # SSEParser + SSERetryStrategy + SSEEvent tests
+    └── OIDCTests.swift                    # OIDCConfiguration + credential + token store + auth service tests
 ```
 
 ---
