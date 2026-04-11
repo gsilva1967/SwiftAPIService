@@ -7,14 +7,34 @@
 
 import Foundation
 
-/// Holds the access and refresh token pair.
+/// Holds the access and refresh token pair, with optional OIDC fields.
 public struct AuthCredential: Sendable, Equatable {
     public let accessToken: String
     public let refreshToken: String
 
-    public init(accessToken: String, refreshToken: String) {
+    /// The OIDC ID token (JWT). `nil` when not using OIDC.
+    public let idToken: String?
+
+    /// The date at which the access token expires. `nil` if unknown.
+    public let accessTokenExpirationDate: Date?
+
+    public init(
+        accessToken: String,
+        refreshToken: String,
+        idToken: String? = nil,
+        accessTokenExpirationDate: Date? = nil
+    ) {
         self.accessToken = accessToken
         self.refreshToken = refreshToken
+        self.idToken = idToken
+        self.accessTokenExpirationDate = accessTokenExpirationDate
+    }
+
+    /// Whether the access token has passed its expiration date.
+    /// Returns `false` when no expiration date is available.
+    public var isAccessTokenExpired: Bool {
+        guard let expirationDate = accessTokenExpirationDate else { return false }
+        return Date() >= expirationDate
     }
 }
 
@@ -30,6 +50,8 @@ public actor TokenStore {
     private enum Keys {
         static let accessToken = "gds_access_token"
         static let refreshToken = "gds_refresh_token"
+        static let idToken = "gds_id_token"
+        static let tokenExpiration = "gds_token_expiration"
     }
 
     // MARK: - Properties
@@ -43,6 +65,9 @@ public actor TokenStore {
     /// Convenience accessor for the current access token.
     public var accessToken: String? { _credential?.accessToken }
 
+    /// Convenience accessor for the current ID token.
+    public var idToken: String? { _credential?.idToken }
+
     // MARK: - Init
 
     /// Creates the store and loads any previously persisted tokens.
@@ -54,7 +79,20 @@ public actor TokenStore {
         // Hydrate from Keychain on launch.
         if let access = keychain.read(forKey: Keys.accessToken),
            let refresh = keychain.read(forKey: Keys.refreshToken) {
-            _credential = AuthCredential(accessToken: access, refreshToken: refresh)
+            let idToken = keychain.read(forKey: Keys.idToken)
+            let expiration: Date?
+            if let raw = keychain.read(forKey: Keys.tokenExpiration),
+               let interval = TimeInterval(raw) {
+                expiration = Date(timeIntervalSince1970: interval)
+            } else {
+                expiration = nil
+            }
+            _credential = AuthCredential(
+                accessToken: access,
+                refreshToken: refresh,
+                idToken: idToken,
+                accessTokenExpirationDate: expiration
+            )
         }
     }
 
@@ -65,6 +103,18 @@ public actor TokenStore {
         _credential = credential
         keychain.set(credential.accessToken, forKey: Keys.accessToken)
         keychain.set(credential.refreshToken, forKey: Keys.refreshToken)
+
+        if let idToken = credential.idToken {
+            keychain.set(idToken, forKey: Keys.idToken)
+        } else {
+            keychain.delete(forKey: Keys.idToken)
+        }
+
+        if let expiration = credential.accessTokenExpirationDate {
+            keychain.set(String(expiration.timeIntervalSince1970), forKey: Keys.tokenExpiration)
+        } else {
+            keychain.delete(forKey: Keys.tokenExpiration)
+        }
     }
 
     /// Removes all stored tokens from memory and the Keychain.
@@ -72,5 +122,7 @@ public actor TokenStore {
         _credential = nil
         keychain.delete(forKey: Keys.accessToken)
         keychain.delete(forKey: Keys.refreshToken)
+        keychain.delete(forKey: Keys.idToken)
+        keychain.delete(forKey: Keys.tokenExpiration)
     }
 }
