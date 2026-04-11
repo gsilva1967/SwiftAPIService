@@ -49,12 +49,12 @@ public protocol OIDCPresentationContextProviding: Sendable {
 /// - Parameters:
 ///   - context: The platform-specific anchor (view controller / window).
 ///   - prefersEphemeralSession: Whether to use an ephemeral browser session.
-/// - Returns: An `OIDExternalUserAgent` ready for use with AppAuth.
+/// - Returns: An `OIDExternalUserAgent` ready for use with AppAuth, if one can be created.
 @MainActor
 func makeExternalUserAgent(
     from context: OIDCPresentingContext,
     prefersEphemeralSession: Bool
-) -> OIDExternalUserAgent {
+) -> OIDExternalUserAgent? {
     #if canImport(UIKit)
     return OIDExternalUserAgentIOS(
         presenting: context,

@@ -242,10 +242,15 @@ public final class OIDCAuthService: @unchecked Sendable {
         try await withCheckedThrowingContinuation { continuation in
             Task { @MainActor in
                 let context = presentationContext.presentingContext()
-                let agent = makeExternalUserAgent(
+                guard let agent = makeExternalUserAgent(
                     from: context,
                     prefersEphemeralSession: self.configuration.prefersEphemeralSession
-                )
+                ) else {
+                    continuation.resume(throwing: OIDCError.authorizationFailed(
+                        "Unable to create external user agent for the provided presentation context."
+                    ))
+                    return
+                }
 
                 self.currentAuthorizationFlow = OIDAuthState.authState(
                     byPresenting: request,
