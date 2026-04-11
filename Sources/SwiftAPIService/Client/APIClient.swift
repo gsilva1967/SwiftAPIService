@@ -218,48 +218,6 @@ public final class APIClient: Sendable {
         }
     }
 
-    // MARK: - Raw Dispatch (legacy-compatible)
-
-    /// A lower-level dispatch method that mirrors the original Safeguard
-    /// `APIService.dispatch` signature for easier migration.
-    ///
-    /// Prefer ``request(_:as:)`` for new code.
-    public func dispatch<R: Codable & Sendable>(
-        httpMethod: HTTPMethod,
-        endPoint: String,
-        contentType: String = "application/json",
-        resultType: R.Type,
-        payload: (some Encodable)? = Optional<String>.none,
-        timeoutIntervalInSeconds: Int? = nil
-    ) async throws -> R {
-        let url = URL(string: endPoint)!
-        var urlRequest = URLRequest(url: url)
-        urlRequest.method = httpMethod
-        urlRequest.setValue(contentType, forHTTPHeaderField: "Content-Type")
-        urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")
-        urlRequest.timeoutInterval = TimeInterval(
-            timeoutIntervalInSeconds ?? Int(environment.timeoutInterval)
-        )
-
-        // Encode body if present.
-        if let payload {
-            urlRequest.httpBody = try encoder.encode(payload)
-        }
-
-        let dataTask = session.request(urlRequest)
-            .validate(statusCode: 200..<201)
-            .serializingDecodable(resultType, automaticallyCancelling: true, decoder: decoder)
-
-        let response = await dataTask.response
-
-        switch response.result {
-        case .success:
-            return try await dataTask.value
-        case let .failure(afError):
-            throw APIError.from(afError)
-        }
-    }
-
     // MARK: - Multipart Upload
 
     /// Uploads a file using multipart form data.
@@ -311,79 +269,11 @@ public final class APIClient: Sendable {
         }
     }
 
-    /// A lower-level upload method mirroring the Safeguard
-    /// `APIService.dispatchUpload` signature.
-    public func dispatchUpload<R: Codable & Sendable>(
-        httpMethod: HTTPMethod,
-        endPoint: String,
-        contentType: String = "image/jpeg",
-        resultType: R.Type,
-        payload: Data,
-        fileName: String,
-        parameters: [String: String]
-    ) async throws -> R {
-        let headers: HTTPHeaders = [
-            "Accept": "application/json",
-        ]
-
-        let dataTask = session.upload(
-            multipartFormData: { multipartFormData in
-                for (key, value) in parameters {
-                    if let data = value.data(using: .utf8) {
-                        multipartFormData.append(data, withName: key)
-                    }
-                }
-                multipartFormData.append(payload, withName: "file", fileName: fileName, mimeType: contentType)
-            },
-            to: endPoint,
-            method: httpMethod,
-            headers: headers
-        )
-        .validate(statusCode: 200..<201)
-        .serializingDecodable(resultType, automaticallyCancelling: true, decoder: decoder)
-
-        let response = await dataTask.response
-
-        switch response.result {
-        case let .success(value):
-            return value
-        case let .failure(afError):
-            throw APIError.from(afError)
-        }
-    }
-
     // MARK: - Text Response
 
     /// Fetches a plain-text response from the given endpoint.
     public func requestText(_ endpoint: some APIEndpoint) async throws -> String {
         let urlRequest = try buildURLRequest(for: endpoint, contentType: "text/plain")
-
-        do {
-            let value = try await session.request(urlRequest)
-                .serializingString()
-                .value
-            return value
-        } catch let afError as AFError {
-            throw APIError.from(afError)
-        } catch {
-            throw APIError.from(error)
-        }
-    }
-
-    /// A lower-level text dispatch mirroring the Safeguard
-    /// `APIService.dispatchText` signature.
-    public func dispatchText(
-        httpMethod: HTTPMethod,
-        endPoint: String,
-        timeoutIntervalInSeconds: Int? = nil
-    ) async throws -> String {
-        let url = URL(string: endPoint)!
-        var urlRequest = URLRequest(url: url)
-        urlRequest.method = httpMethod
-        urlRequest.setValue("text/plain", forHTTPHeaderField: "Content-Type")
-        urlRequest.timeoutInterval = TimeInterval(
-            timeoutIntervalInSeconds ?? Int(environment.timeoutInterval)
-        )
 
         do {
             let value = try await session.request(urlRequest)
