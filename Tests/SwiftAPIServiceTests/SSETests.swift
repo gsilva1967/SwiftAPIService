@@ -5,7 +5,7 @@
 
 import Foundation
 import Testing
-@testable import SwiftAPIService
+@testable import SwiftAPICore
 
 @Test func sseParserParsesEventFields() throws {
     var parser = SSEParser()

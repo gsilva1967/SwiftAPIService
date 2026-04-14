@@ -5,44 +5,8 @@
 //  Created by Gustavo Silva.
 //
 
-// Re-export Alamofire so consumers don't need a direct dependency
-// for common types like HTTPMethod, HTTPHeaders, etc.
-@_exported import Alamofire
-
-// This file intentionally left minimal.
-// All public API surface is exposed through individual source files:
-//
-//  Configuration/
-//    - APIEnvironment
-//
-//  Endpoint/
-//    - APIEndpoint
-//
-//  Client/
-//    - APIClient
-//
-//  Auth/
-//    - AuthCredential, TokenStore
-//    - AuthInterceptor
-//    - TokenRefreshProvider
-//
-//  Security/
-//    - KeychainService
-//
-//  Errors/
-//    - APIError, APIErrorSeverity
-//
-//  Logging/
-//    - APILogger, APILogLevel
-//
-//  SSE/
-//    - SSEEvent, SSEError
-//    - SSERetryStrategy, SSEStreamConfiguration
-//    - SSEEndpoint
-//
-//  OIDC/
-//    - OIDCConfiguration
-//    - OIDCAuthService
-//    - OIDCTokenRefreshProvider
-//    - OIDCPresentationContextProviding
-//    - OIDCError
+// Umbrella module — re-exports both SwiftAPICore and SwiftAPIOIDC
+// so that existing `import SwiftAPIService` statements continue
+// to work unchanged.
+@_exported import SwiftAPICore
+@_exported import SwiftAPIOIDC
