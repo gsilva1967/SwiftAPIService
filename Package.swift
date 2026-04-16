@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.1
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -15,6 +15,11 @@ let package = Package(
         .library(name: "SwiftAPIOIDC", targets: ["SwiftAPIOIDC"]),
         // Combined — backward compatible
         .library(name: "SwiftAPIService", targets: ["SwiftAPIService"]),
+    ],
+    traits: [
+        .default(enabledTraits: ["Networking", "OIDC"]),
+        .trait(name: "Networking", description: "Alamofire-based HTTP networking client"),
+        .trait(name: "OIDC", description: "OIDC authentication via AppAuth"),
     ],
     dependencies: [
         .package(url: "https://github.com/Alamofire/Alamofire.git", from: "5.10.0"),
@@ -45,7 +50,11 @@ let package = Package(
         // Umbrella (backward compatible)
         .target(
             name: "SwiftAPIService",
-            dependencies: ["SwiftAPICore", "SwiftAPIOIDC"],
+            dependencies: [
+                "SwiftAPIAuth",
+                .target(name: "SwiftAPICore", condition: .when(traits: ["Networking"])),
+                .target(name: "SwiftAPIOIDC", condition: .when(traits: ["OIDC"])),
+            ],
             path: "Sources/SwiftAPIService"
         ),
         // Tests
